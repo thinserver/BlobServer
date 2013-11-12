@@ -9,25 +9,26 @@ from random import seed, randint
 seed()
 
 def randchar():
-	return chr(65+(32*randint(0,1))+randint(0,25))
+    return chr(65+(32*randint(0,1))+randint(0,25))
 
 def upload(environ, start_response):
     BLOB = "Test"
     if len(BLOB) > 50000:
         # https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
         # HTTP RESPONSE CODE 413: Request Entity Too Large
-        return None
+        start_response('413 Request Entity Too Large')
+        return
     elif len(BLOB) > 0:
         ID = ''.join([randchar() for i in range(6)])
         IP = "1.2.3.4"
         mysql = MySQLdb.connect(mysql_opts['host'], mysql_opts['user'], mysql_opts['pass'], mysql_opts['db'])
         cursor = mysql.cursor()
         cursor.execute("INSERT INTO `Lymbo` (`ID`,`IP`,`BLOB`) VALUES ('%s','%s','%s');" % (ID,IP,BLOB))
-	start_response('200 OK', [('content-type', 'text/plain')])
+        start_response('200 OK', [('content-type', 'text/plain')])
         return ID 
     else:
-	start_response('200 OK', [('content-type', 'text/plain')])
-        return "Error: empty BLOB"
+        start_response('200 OK', [('content-type', 'text/plain')])
+        return "400 Bad Request"
 
 def download(environ, start_response):
     mysql = MySQLdb.connect(mysql_opts['host'], mysql_opts['user'], mysql_opts['pass'], mysql_opts['db'])
