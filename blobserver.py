@@ -11,6 +11,8 @@ seed()
 from urllib import unquote_plus
 import cgi
 
+logfile = '/var/log/blobserver.log'
+
 def parseQueryString(environ):
     q = environ['QUERY_STRING'].split('&')
     d = {}
@@ -23,12 +25,13 @@ def parseQueryString(environ):
 
 class Encapsulated:
     def __init__(self, request_body):
+        open(logfile,'a').write(request_body+'\n')
         s = request_body.split('\n')
         boundary = s[0]
         content_disposition = s[1]
         content_type = s[2]
         header = '\n'.join(s[:4])
-        self.data = request_body[len(header)+1:len(request_body)-len(boundary)]
+        self.data = request_body[len(header)+1:len(request_body)-len(boundary)-3]
 
 def randomChar():
     #return chr(65+(32*randint(0,1))+randint(0,25))
@@ -51,8 +54,9 @@ def randomID():
 
 def uploadForm(environ, start_response):
     page = """<html>
-<body style="padding:20%;">
+<body style="padding-top: 15%; padding-left: 35%;">
 <form name="upload" method="post" enctype="multipart/form-data">
+<h1>Upload a file: </h1>
 <input name="blob" type="file" onchange="document.forms['upload'].submit();"/>
 </form>
 </body>
@@ -67,6 +71,7 @@ def uploadForm(environ, start_response):
 def upload(environ, start_response):
     # return upload form
     if environ['REQUEST_METHOD'] == 'GET':
+        
         return uploadForm(environ, start_response)
     
     # only accept data from HTTP POST
@@ -97,7 +102,7 @@ def upload(environ, start_response):
         cursor = mysql.cursor()
         cursor.execute("INSERT INTO `%s` (`ID`,`from`,`blob`) VALUES ('%s','%s','%s');" % (mysql_opts['table:blobs'],ID,IP,mysql.escape_string(BLOB)))
         start_response('200 OK', [('Content-Type', 'text/html')])
-        return ['Upload complete.<br/>Your BLOB is available here: <a href="download?id='+ID+'">http://blob.interoberlin.de/download?id='+ID+'</a>']
+        return ['<html>\n<head>\n<meta name="id" content="'+ID+'"/>\n</head>\n<body>\nUpload complete.<br/>\nYour BLOB is available here: <a href="http://blob.interoberlin.de/download?id='+ID+'">http://blob.interoberlin.de/download?id='+ID+'</a><br/>\n<a href="upload">Upload more</a>\n</body>\n</html>']
     else:
         # reject anything that is not GET or POST
         start_response('400 Bad Request', [('Content-Type', 'text/plain')])
