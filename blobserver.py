@@ -34,26 +34,40 @@ class Encapsulated:
         header = '\n'.join(s[:4])
         self.data = request_body[len(header)+1:len(request_body)-len(boundary)-3]
 
-def randomChar():
-    #return chr(65+(32*randint(0,1))+randint(0,25))
-    return chr(97+randint(0,25))
+#
+# methods for ID and key generation
+#
+def randomChar(onlyLowercase=True):
+    if onlyLowercase:
+        return chr(97+randint(0,25))
+    else:
+        return chr(65+(32*randint(0,1))+randint(0,25))
 
-#vocals = ['A','E','I','O','U','a','e','i','o','u']
-vocals = ['a','e','i','o','u']
+# True/False corresponds to onlyLowercase = True/False
+vocals = {
+          True: ['a','e','i','o','u'],
+          False: ['A','E','I','O','U','a','e','i','o','u']
+          }
 
-def randomVocal():
-    return vocals[randint(0,len(vocals)-1)]
+def randomVocal(onlyLowercase=True):
+    return vocals[onlyLowercase][randint(0,len(vocals[onlyLowercase])-1)]
 
-def randomConsonant():
+def randomConsonant(onlyLowercase=True):
     c = 'a'
-    while c in vocals:
-        c = randomChar()
+    while c in vocals[onlyLowercase]:
+        c = randomChar(onlyLowercase)
     return c
 
 def randomID():
     return randomConsonant()+randomVocal()+randomConsonant()+randomVocal()+randomConsonant()
 
-def uploadForm(environ, start_response):
+def randomKey():
+    return ''.join([randomChar(onlyLowercase=False) for i in range(5)])
+
+#
+# HTML form for manual BLOB (file) upload
+#
+def uploadForm(environ, start_response, debug=False):
     page = """<html>
 <body style="padding-top: 15%; padding-left: 35%;">
 <form name="upload" method="post" enctype="multipart/form-data">
@@ -61,8 +75,11 @@ def uploadForm(environ, start_response):
 <input name="blob" type="file" onchange="document.forms['upload'].submit();"/>
 </form>
 </body>
-</html>
-<!--\n"""+("\n".join([str(key)+": "+str(environ[key]) for key in environ.keys()]))+"\n--!>"
+</html>"""
+    # show WSGI environment variables
+    # for debugging
+    if debug:
+        page += "\n<!--\n"+("\n".join([str(key)+": "+str(environ[key]) for key in environ.keys()]))+"\n--!>"
     start_response('200 OK', [('Content-Type', 'text/html')])
     return [page]
 
@@ -110,9 +127,11 @@ def upload(environ, start_response, mysql_opts):
     ID = randomID()
     IP = environ['HTTP_X_FORWARDED_FOR']
     agent = environ['HTTP_USER_AGENT']
+    key = randomKey()
+    
     mysql = MySQLdb.connect(mysql_opts['host'], mysql_opts['user'], mysql_opts['pass'], mysql_opts['db'])
     cursor = mysql.cursor()
-    cmd = "INSERT INTO `%s` (`ID`,`from`,`agent`,`blob`,`created`) VALUES ('%s','%s','%s','%s',NOW());" % (mysql_opts['table:blobs'],ID,IP,mysql.escape_string(agent),mysql.escape_string(BLOB))
+    cmd = "INSERT INTO `%s` (`ID`,`from`,`agent`,`blob`,`owner_key`,`created`) VALUES ('%s','%s','%s','%s','%s',NOW());" % (mysql_opts['table:blobs'],ID,IP,mysql.escape_string(agent),mysql.escape_string(BLOB),key)
     open(logfile,'a').write(cmd+'\n')
     cursor.execute(cmd)
     start_response('200 OK', [('Content-Type', 'text/html')])
@@ -125,16 +144,21 @@ def upload(environ, start_response, mysql_opts):
 <html>
 <head>
 <meta name="id" content=\""""+ID+"""\"/>
+<meta name="owner_key" content=\""""+key+"""\"/>
 <script>
 """+open(environ['SCRIPT_FILENAME'][:-len('/blobserver.py')]+'/qrcode.js').read()+"""
 </script>
 </head>
 <body id='body'>
-Upload complete.<br/>
+<h1>Upload complete</h1>
 Your BLOB is available here: 
 <a href="http://blob.interoberlin.de/download?id="""+ID+"""\">http://blob.interoberlin.de/download?id="""+ID+"""</a><br/>
-<a href="upload">Upload more</a>
+<br/>
+To edit or remove this BLOB later, remember the following, case-sensitive key: <b style="font-family:'Courier New';">"""+key+"""</b><br/>
+<br/>
+<a href="upload">Upload more files</a>
 <br/><br/>
+<h1>A QR code for your link:</h1>
 <script>
 new QRCode(document.getElementById('body'),'http://blob.interoberlin.de/download?id="""+ID+"""'); 
 </script>
